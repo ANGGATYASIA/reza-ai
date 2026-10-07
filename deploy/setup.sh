@@ -94,6 +94,12 @@ else
   git clone "$REPO_URL" "$APP_DIR"
 fi
 
+# Rakit kembali pnpm-lock.yaml (dipecah saat push karena batas ukuran argumen)
+if ls "$APP_DIR"/pnpm-lock.yaml.part* > /dev/null 2>&1; then
+  log "Merakit pnpm-lock.yaml..."
+  cat "$APP_DIR"/pnpm-lock.yaml.part* > "$APP_DIR/pnpm-lock.yaml"
+fi
+
 # ---------- 5. .env ----------
 if [ ! -f "$APP_DIR/.env" ]; then
   log "Generate secrets..."
