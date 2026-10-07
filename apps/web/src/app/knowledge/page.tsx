@@ -1,4 +1,5 @@
 import { requireAdminPage } from "@/lib/auth-server";
+import { AppShell } from "@/components/app-shell";
 import { KnowledgeClient } from "@/components/knowledge-client";
 
 export const dynamic = "force-dynamic";
@@ -11,5 +12,11 @@ export const dynamic = "force-dynamic";
  */
 export default async function KnowledgePage() {
   await requireAdminPage();
-  return <KnowledgeClient />;
+  return (
+    <AppShell>
+      <div style={{ flex: 1, minWidth: 0, overflowY: "auto" }}>
+        <KnowledgeClient />
+      </div>
+    </AppShell>
+  );
 }

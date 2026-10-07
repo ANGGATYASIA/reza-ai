@@ -1,5 +1,6 @@
 import { getGeneralSettings, listProviderSummaries } from "@reza-ai/core";
 import { requireAdminPage } from "@/lib/auth-server";
+import { AppShell } from "@/components/app-shell";
 import { SettingsForm } from "./settings-form";
 
 export const dynamic = "force-dynamic";
@@ -15,5 +16,11 @@ export default async function SettingsPage() {
     getGeneralSettings(),
     listProviderSummaries(),
   ]);
-  return <SettingsForm initialGeneral={general} initialProviders={providers} />;
+  return (
+    <AppShell>
+      <div style={{ flex: 1, minWidth: 0, overflowY: "auto" }}>
+        <SettingsForm initialGeneral={general} initialProviders={providers} />
+      </div>
+    </AppShell>
+  );
 }
