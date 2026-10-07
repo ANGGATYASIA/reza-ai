@@ -16,7 +16,7 @@ if [ -f "$PRISMA_SCHEMA" ] && [ -n "${DATABASE_URL:-}" ]; then
   fi
   if [ -n "$PRISMA_BIN" ]; then
     echo "[entrypoint] prisma migrate deploy..."
-    node "$PRISMA_BIN" migrate deploy --schema "$PRISMA_SCHEMA"
+    "$PRISMA_BIN" migrate deploy --schema "$PRISMA_SCHEMA"
   else
     echo "[entrypoint] prisma CLI tidak ditemukan — lewati migrasi."
   fi
