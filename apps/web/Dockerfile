@@ -13,6 +13,7 @@ FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm --filter @reza-ai/core prisma:generate
+RUN pnpm --filter @reza-ai/core build
 RUN pnpm --filter @reza-ai/web build
 
 FROM base AS runner
