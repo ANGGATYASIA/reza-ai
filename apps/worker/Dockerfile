@@ -21,9 +21,11 @@ ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=builder /app/apps/worker/dist ./apps/worker/dist
 COPY --from=builder /app/apps/worker/package.json ./apps/worker/
+COPY --from=builder /app/apps/worker/node_modules ./apps/worker/node_modules
 COPY --from=builder /app/packages/core/dist ./packages/core/dist
 COPY --from=builder /app/packages/core/package.json ./packages/core/
 COPY --from=builder /app/packages/core/prisma ./packages/core/prisma
+COPY --from=builder /app/packages/core/node_modules ./packages/core/node_modules
 COPY --from=builder /app/node_modules ./node_modules
 COPY apps/worker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

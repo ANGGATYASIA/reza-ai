@@ -21,10 +21,12 @@ ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=builder /app/apps/web/.next ./apps/web/.next
 COPY --from=builder /app/apps/web/package.json ./apps/web/
+COPY --from=builder /app/apps/web/node_modules ./apps/web/node_modules
 COPY --from=builder /app/apps/web/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 COPY --from=builder /app/packages/core/dist ./packages/core/dist
 COPY --from=builder /app/packages/core/package.json ./packages/core/
 COPY --from=builder /app/packages/core/prisma ./packages/core/prisma
+COPY --from=builder /app/packages/core/node_modules ./packages/core/node_modules
 COPY --from=builder /app/node_modules ./node_modules
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 EXPOSE 3000
