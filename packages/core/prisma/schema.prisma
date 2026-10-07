@@ -1,0 +1,383 @@
+// ============================================================
+// Reza AI — Prisma schema (Fase 1 MVP, lengkap)
+// Semua entitas Fase 1 didefinisikan di sini supaya task-task
+// berikutnya tidak berebut migrasi.
+//
+// Catatan vector/tsvector:
+// - Kolom embedding memakai Unsupported("vector(1536)").
+// - Ekstensi `vector` WAJIB aktif: CREATE EXTENSION IF NOT EXISTS vector;
+//   ada di migrasi pertama.
+// - Kolom tsv (tsvector, generated) + index HNSW + index GIN dibuat
+//   via migrasi SQL manual (Prisma tidak native mendukungnya).
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------- Admin & Settings ----------------
+
+model Admin {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  totpSecret   String? // terenkripsi AES-256-GCM; null = 2FA belum diaktifkan
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+/// Nilai sensitif (API key provider, dsb.) disimpan terenkripsi
+/// AES-256-GCM. Master key dari env MASTER_KEY (32 byte hex).
+model Setting {
+  id             String   @id @default(cuid())
+  key            String   @unique
+  encryptedValue String
+  iv             String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  providers Provider[]
+}
+
+// ---------------- Provider AI (BYOK) ----------------
+
+enum ProviderSlot {
+  chat
+  embedding
+  vision
+  transcription
+}
+
+model Provider {
+  id               String       @id @default(cuid())
+  slot             ProviderSlot
+  name             String
+  baseUrl          String
+  apiKeySetting    Setting      @relation(fields: [apiKeySettingKey], references: [key])
+  apiKeySettingKey String
+  model            String
+  enabled          Boolean      @default(true)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@unique([slot, name])
+}
+
+// ---------------- Kontak & Chat ----------------
+
+enum ContactTag {
+  Lead
+  Internal
+}
+
+/// pn = nomor E.164 tanpa "+", mis. "628131742034"
+model Contact {
+  id          String     @id @default(cuid())
+  pn          String     @unique
+  lid         String?    @unique
+  tag         ContactTag @default(Lead)
+  name        String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  chat        Chat?
+  leadProfile LeadProfile?
+  leadEvents  LeadEvent[]
+  followUps   FollowUp[]
+}
+
+enum ChatMode {
+  full
+  semi
+  off
+}
+
+model Chat {
+  id           String    @id @default(cuid())
+  contactId    String    @unique
+  contact      Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  modeOverride ChatMode?
+  aiPaused     Boolean   @default(false)
+  pausedUntil  DateTime?
+  ignored      Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  messages Message[]
+  drafts   Draft[]
+  handoffs Handoff[]
+}
+
+enum MessageSource {
+  wa
+  phone
+  dashboard
+  ai
+}
+
+model Message {
+  id          String        @id @default(cuid())
+  chatId      String
+  chat        Chat          @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  waMessageId String?       @unique
+  fromMe      Boolean
+  body        String?
+  mediaType   String?
+  mediaPath   String?
+  source      MessageSource
+  createdAt   DateTime      @default(now())
+
+  @@index([chatId, createdAt])
+}
+
+// ---------------- Draft & Handoff ----------------
+
+enum DraftStatus {
+  pending
+  approved
+  rejected
+  edited
+}
+
+model Draft {
+  id          String      @id @default(cuid())
+  chatId      String
+  chat        Chat        @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  body        String
+  status      DraftStatus @default(pending)
+  confidence  Float?
+  reason      String?
+  sourcesUsed Json?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([chatId, createdAt])
+}
+
+enum HandoffStatus {
+  open
+  resumed
+  closed
+}
+
+model Handoff {
+  id         String        @id @default(cuid())
+  chatId     String
+  chat       Chat          @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  reason     String
+  summary    String?
+  status     HandoffStatus @default(open)
+  notifiedAt DateTime?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@index([chatId, status])
+}
+
+// ---------------- Knowledge Base ----------------
+
+enum KnowledgeType {
+  text
+  url
+  pdf
+  image
+}
+
+enum KnowledgeStatus {
+  processing
+  ready
+  failed
+}
+
+model KnowledgeItem {
+  id         String          @id @default(cuid())
+  title      String
+  type       KnowledgeType
+  status     KnowledgeStatus @default(processing)
+  category   String?
+  validUntil DateTime?
+  sourceUri  String?
+  // Task 6: sumber mentah agar ingest bisa diulang (idempoten) tanpa
+  // bergantung pada berkas sementara di luar DB.
+  // - type=text  -> content (teks mentah)
+  // - type=url   -> sourceUri (URL; diambil ulang saat ingest)
+  // - type=pdf   -> data (base64 berkas PDF — TEXT, bukan BYTEA, karena
+  //   driver adapter PGlite merusak nilai Bytes biner) + sourceUri (nama berkas)
+  content      String?
+  data         String?
+  errorMessage String? // pesan kegagalan terakhir (status failed)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  chunks KnowledgeChunk[]
+}
+
+model KnowledgeChunk {
+  id         String   @id @default(cuid())
+  itemId     String
+  item       KnowledgeItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  chunkIndex Int
+  title      String
+  section    String?
+  content    String
+  embedding  Unsupported("vector(1536)")?
+  createdAt  DateTime @default(now())
+  // Kolom `tsv` (tsvector, generated) + index GIN/HNSW ditambah
+  // via migrasi SQL manual — lihat prisma/migrations/*_search/.
+
+  @@unique([itemId, chunkIndex])
+  @@index([itemId])
+}
+
+// ---------------- Aset ----------------
+
+enum AssetKind {
+  brosur
+  pricelist
+  siteplan
+  foto
+  lainnya
+}
+
+model Asset {
+  id          String    @id @default(cuid())
+  filename    String
+  mimeType    String
+  path        String
+  tag         String
+  description String?
+  kind        AssetKind
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([kind])
+  @@index([tag])
+}
+
+// ---------------- Lead pipeline ----------------
+
+model LeadProfile {
+  id              String   @id @default(cuid())
+  contactId       String   @unique
+  contact         Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  name            String?
+  budgetMin       BigInt?
+  budgetMax       BigInt?
+  tipeIncaran      String?
+  paymentMethod   PaymentMethod @default(unknown)
+  dpPercent       Float?
+  domisili        String?
+  timeline        String?
+  keberatan       String?
+  summary         String?
+  manualOverride  Json     @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+enum PaymentMethod {
+  kpr
+  cash
+  unknown
+}
+
+enum LeadEventType {
+  stage
+  score
+  note
+}
+
+model LeadEvent {
+  id        String        @id @default(cuid())
+  contactId String
+  contact   Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  type      LeadEventType
+  from      String?
+  to        String?
+  meta      Json?
+  createdAt DateTime      @default(now())
+
+  @@index([contactId, createdAt])
+}
+
+enum FollowUpStage {
+  h1
+  h3
+  h7
+  h14
+}
+
+enum FollowUpStatus {
+  scheduled
+  sent
+  cancelled
+  skipped
+}
+
+model FollowUp {
+  id          String         @id @default(cuid())
+  contactId   String
+  contact     Contact        @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  scheduledAt DateTime
+  stage       FollowUpStage
+  status      FollowUpStatus @default(scheduled)
+  bodyText    String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([status, scheduledAt])
+}
+
+// ---------------- Contoh jawaban & playbook ----------------
+
+enum ExampleSource {
+  draft_edit
+  manual_reply
+}
+
+model ExamplePair {
+  id              String        @id @default(cuid())
+  leadQuestion    String
+  correctedAnswer String
+  embedding       Unsupported("vector(1536)")?
+  source          ExampleSource
+  createdAt       DateTime      @default(now())
+}
+
+model Playbook {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  title         String
+  triggerIntent String
+  bodyMarkdown  String
+  enabled       Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ---------------- Tipe unit properti ----------------
+
+enum UnitStatus {
+  tersedia
+  terbatas
+  habis
+}
+
+model UnitType {
+  id     String     @id @default(cuid())
+  code   String     @unique
+  name   String
+  lt     Float
+  lb     Float
+  kt     Int
+  km     Int
+  price  BigInt
+  status UnitStatus @default(tersedia)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

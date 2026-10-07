@@ -1,0 +1,97 @@
+# ============================================================
+# Reza AI — docker compose (artefak deploy VPS, dipakai Task 17)
+# postgres: pgvector/pgvector:pg16 (wajib untuk kolom vector(1536))
+# ============================================================
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: reza-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: reza
+      POSTGRES_PASSWORD: reza
+      POSTGRES_DB: reza_ai
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reza -d reza_ai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - reza-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: reza-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - reza-net
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: reza-web
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://reza:reza@postgres:5432/reza_ai
+      REDIS_URL: redis://redis:6379
+      MASTER_KEY: ${MASTER_KEY}
+      SESSION_SECRET: ${SESSION_SECRET}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      PORT: 3000
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks:
+      - reza-net
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    container_name: reza-worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://reza:reza@postgres:5432/reza_ai
+      REDIS_URL: redis://redis:6379
+      MASTER_KEY: ${MASTER_KEY}
+      WA_AUTH_DIR: /data/wa-auth
+      OWNER_WA_NUMBER: ${OWNER_WA_NUMBER:-082114812842}
+      WORKER_HEARTBEAT_INTERVAL: 15
+    volumes:
+      - wa-auth:/data/wa-auth
+    networks:
+      - reza-net
+
+volumes:
+  pgdata:
+  redisdata:
+  wa-auth:
+
+networks:
+  reza-net:
+    driver: bridge
