@@ -150,7 +150,10 @@ $DOMAIN {
     reverse_proxy 127.0.0.1:3000
 }
 EOF
-systemctl reload caddy
+systemctl enable caddy > /dev/null 2>&1 || true
+systemctl restart caddy
+sleep 2
+systemctl is-active --quiet caddy || die "Caddy gagal start. Cek: journalctl -u caddy"
 
 # ---------- 8. Hardening ----------
 log "UFW: buka 22, 80, 443..."
