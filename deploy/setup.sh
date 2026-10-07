@@ -70,7 +70,8 @@ SAKANI_CONTAINERS="$(docker ps -a --format '{{.Names}} {{.Image}}' 2>/dev/null |
 [ -n "$SAKANI_CONTAINERS" ] && { echo "--- container sakani ---"; echo "$SAKANI_CONTAINERS"; }
 
 BACKUP_FILE="/root/backup-sakani-closer-$(date +%F).tgz"
-read -r -p "Backup ke $BACKUP_FILE lalu HENTIKAN & HAPUS project sakani closer? [y/N] " jawab
+# Baca dari /dev/tty agar tidak menelan sisa script saat dijalankan via pipe
+read -r -p "Backup ke $BACKUP_FILE lalu HENTIKAN & HAPUS project sakani closer? [y/N] " jawab < /dev/tty
 if [[ "$jawab" =~ ^[Yy]$ ]]; then
   log "Membackup..."
   # shellcheck disable=SC2086
