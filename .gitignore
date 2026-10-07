@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+build/
+.next/
+out/
+
+# Env & secrets — JANGAN commit file .env asli
+.env
+.env.local
+.env*.local
+
+# Prisma
+prisma/migrations/**/migration.sql.lock
+
+# WhatsApp auth state (berisi sesi terenkripsi)
+/data/
+wa-auth/
+*-auth/
+
+# Logs & OS
+*.log
+npm-debug.log*
+pnpm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Test & coverage
+coverage/
+.nyc_output/
+
+# PGlite data (test/demo lokal)
+.pglite/
+
+# IDE
+.vscode/
+.idea/
+
+# Playwright
+apps/web/test-results/
+apps/web/playwright-report/
+
+# E2E lokal (database PGlite sandbox)
+apps/web/data/
