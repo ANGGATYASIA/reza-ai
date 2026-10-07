@@ -31,4 +31,5 @@ COPY --from=builder /app/node_modules ./node_modules
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 EXPOSE 3000
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["node", "apps/web/node_modules/next/dist/bin/next", "start", "-p", "3000"]
+# next start harus dijalankan dari apps/web (di sanalah folder .next berada)
+CMD ["sh", "-c", "cd /app/apps/web && exec node node_modules/next/dist/bin/next start -p 3000"]
