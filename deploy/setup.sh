@@ -73,14 +73,27 @@ BACKUP_FILE="/root/backup-sakani-closer-$(date +%F).tgz"
 read -r -p "Backup ke $BACKUP_FILE lalu HENTIKAN & HAPUS project sakani closer? [y/N] " jawab
 if [[ "$jawab" =~ ^[Yy]$ ]]; then
   log "Membackup..."
+  # shellcheck disable=SC2086
   tar -czf "$BACKUP_FILE" $SAKANI_DIRS 2>/dev/null || warn "Tidak ada direktori untuk dibackup."
   log "Backup tersimpan: $BACKUP_FILE"
   if [ -n "$SAKANI_CONTAINERS" ]; then
-    echo "$SAKANI_CONTAINERS" | awk '{print $1}' | xargs -r docker stop > /dev/null
-    echo "$SAKANI_CONTAINERS" | awk '{print $1}' | xargs -r docker rm > /dev/null
-    log "Container sakani closer dihentikan & dihapus."
+    NAMES="$(echo "$SAKANI_CONTAINERS" | awk '{print $1}')"
+    log "Menghentikan container sakani..."
+    echo "$NAMES" | xargs -r docker stop > /dev/null 2>&1 || true
+    sleep 3
+    log "Menghapus container sakani..."
+    echo "$NAMES" | xargs -r docker rm -f > /dev/null 2>&1 || true
+    SISA="$(docker ps -a --format '{{.Names}}' 2>/dev/null | grep -i sakani || true)"
+    if [ -n "$SISA" ]; then
+      warn "Container bandel (dibiarkan, sudah berhenti): $SISA"
+    else
+      log "Container sakani closer bersih."
+    fi
   fi
-  [ -n "$SAKANI_DIRS" ] && echo "$SAKANI_DIRS" | xargs -r rm -rf && log "Direktori sakani closer dihapus."
+  if [ -n "$SAKANI_DIRS" ]; then
+    echo "$SAKANI_DIRS" | xargs -r rm -rf || warn "Sebagian direktori gagal dihapus."
+    log "Direktori sakani closer dihapus."
+  fi
 else
   warn "Project sakani closer DIBIARKAN. Pastikan tidak bentrok di port 80/443/3000."
 fi
