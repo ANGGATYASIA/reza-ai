@@ -1,0 +1,36 @@
+{
+  "dependencies": {
+    "@reza-ai/core": "workspace:*",
+    "bullmq": "^5.81.5",
+    "ioredis": "^5.4.1",
+    "next": "16.3.8",
+    "otplib": "^13.5.0",
+    "qrcode": "^1.5.4",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@playwright/test": "^1.63.0",
+    "@types/ioredis-mock": "^8.2.8",
+    "@types/node": "^22.10.0",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "ioredis-mock": "^8.13.1",
+    "typescript": "^5.7.3",
+    "vitest": "^5.0.3"
+  },
+  "name": "@reza-ai/web",
+  "private": true,
+  "scripts": {
+    "build": "next build --webpack",
+    "dev": "next dev -p 3000",
+    "lint": "eslint .",
+    "start": "next start -p 3000",
+    "test": "vitest run",
+    "e2e": "playwright test",
+    "e2e:reset-db": "rm -rf ./data/e2e && (cd ../../packages/core && DATABASE_URL=pglite://../../apps/web/data/e2e node scripts/pglite-migrate.mjs)"
+  },
+  "version": "0.1.0"
+}
