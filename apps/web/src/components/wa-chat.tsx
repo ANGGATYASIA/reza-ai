@@ -130,7 +130,7 @@ export function WaChat() {
   }, []);
 
   useEffect(() => {
-    if (wa.status === "connected") void loadChats();
+    if (wa.status === "open") void loadChats();
   }, [wa.status, loadChats]);
 
   const loadThread = useCallback(async (chatId: string) => {
@@ -188,7 +188,7 @@ export function WaChat() {
     }
   }
 
-  const connected = wa.status === "connected";
+  const connected = wa.status === "open";
   const filtered = q
     ? chats.filter((c) =>
         displayName(c).toLowerCase().includes(q.toLowerCase()),
