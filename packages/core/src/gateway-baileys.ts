@@ -57,6 +57,8 @@ export interface RawMessageLike {
     id?: string;
     participant?: string;
   };
+  /** Nama tampilan pengirim dari WhatsApp (pushName). */
+  pushName?: string;
   message?: Record<string, unknown> | null;
   messageTimestamp?: unknown;
 }
@@ -77,6 +79,11 @@ export interface MinimalSocket {
   };
   ws: { close(): void };
   user?: { id: string; name?: string };
+  signalRepository?: {
+    lidMapping?: {
+      getPNForLID(lid: string): Promise<string | null>;
+    };
+  };
   sendMessage(
     jid: string,
     content: unknown,
@@ -636,16 +643,49 @@ export class BaileysGateway implements WhatsAppGateway {
         continue;
       }
       if (!msg) continue;
+      // LID tanpa PN: coba resolve via mapping Baileys sebelum diteruskan.
+      // Tanpa ini kontak tampil sebagai "lid:<angka>".
+      if (!msg.from && msg.lid) {
+        const sock = this.sock;
+        this.resolvePnForLid(sock, msg.lid)
+          .then((pn) => {
+            if (pn) msg!.from = pn.replace(/\D/g, "");
+            this.dispatchMessage(msg!);
+          })
+          .catch((e) =>
+            console.error("[BaileysGateway] resolve LID gagal:", e),
+          );
+        this.rawCache.set(msg.id, raw as unknown as WAMessage);
+        continue;
+      }
       this.rawCache.set(msg.id, raw as unknown as WAMessage);
       if (this.rawCache.size > MAX_RAW_CACHE) {
         const oldest = this.rawCache.keys().next().value;
         if (oldest) this.rawCache.delete(oldest);
       }
-      for (const h of this.messageHandlers) {
-        Promise.resolve(h(msg)).catch((e) =>
-          console.error("[BaileysGateway] message handler gagal:", e),
-        );
-      }
+      this.dispatchMessage(msg);
+    }
+  }
+
+  /** Kirim pesan ternormalisasi ke semua handler. */
+  private dispatchMessage(msg: InboundMessage): void {
+    for (const h of this.messageHandlers) {
+      Promise.resolve(h(msg)).catch((e) =>
+        console.error("[BaileysGateway] message handler gagal:", e),
+      );
+    }
+  }
+
+  /** Resolve LID -> nomor via mapping internal Baileys (null bila tak dikenal). */
+  private async resolvePnForLid(
+    sock: MinimalSocket | null,
+    lid: string,
+  ): Promise<string | null> {
+    try {
+      const pn = await sock?.signalRepository?.lidMapping?.getPNForLID(lid);
+      return typeof pn === "string" && pn ? pn : null;
+    } catch {
+      return null;
     }
   }
 
@@ -732,6 +772,8 @@ export class BaileysGateway implements WhatsAppGateway {
       id,
       from: pn,
       lid,
+      senderName:
+        typeof raw.pushName === "string" && raw.pushName ? raw.pushName : undefined,
       body,
       mediaType,
       quotedId,

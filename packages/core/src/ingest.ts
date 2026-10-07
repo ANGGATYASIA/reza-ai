@@ -43,6 +43,8 @@ export interface ContactIdentity {
   /** Nomor E.164 tanpa "+" — atau pn semu (group:/broadcast/lid:). */
   pn: string;
   lid?: string;
+  /** Nama tampilan (pushName WhatsApp), bila ada. */
+  name?: string;
 }
 
 /**
@@ -66,12 +68,13 @@ async function upsertContact(
 
   const byLid = lid ? await prisma.contact.findUnique({ where: { lid } }) : null;
   const byPn = pn ? await prisma.contact.findUnique({ where: { pn } }) : null;
+  const name = identity.name || undefined;
 
   if (byLid && byPn && byLid.id !== byPn.id) {
     if (!byPn.lid && lid) {
       return prisma.contact.update({
         where: { id: byPn.id },
-        data: { lid },
+        data: { lid, ...(name && !byPn.name ? { name } : {}) },
       });
     }
     return byPn;
@@ -79,15 +82,20 @@ async function upsertContact(
 
   const primary = byPn ?? byLid;
   if (primary) {
-    const data: { lid?: string; pn?: string } = {};
+    const data: { lid?: string; pn?: string; name?: string } = {};
     if (lid && !primary.lid) data.lid = lid;
     if (pn && primary.pn !== pn && primary.pn.startsWith("lid:")) data.pn = pn;
+    if (name && !primary.name) data.name = name;
     if (Object.keys(data).length === 0) return primary;
     return prisma.contact.update({ where: { id: primary.id }, data });
   }
 
   return prisma.contact.create({
-    data: { pn: pn || `lid:${lid as string}`, ...(lid ? { lid } : {}) },
+    data: {
+      pn: pn || `lid:${lid as string}`,
+      ...(lid ? { lid } : {}),
+      ...(name ? { name } : {}),
+    },
   });
 }
 
@@ -144,7 +152,11 @@ export async function processInboundMessage(
     lid = msg.lid || undefined;
   }
 
-  const contact = await upsertContact(prisma, { pn, lid });
+  const contact = await upsertContact(prisma, {
+    pn,
+    lid,
+    name: msg.senderName || undefined,
+  });
 
   let chat = await prisma.chat.findUnique({
     where: { contactId: contact.id },

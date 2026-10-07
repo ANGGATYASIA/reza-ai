@@ -6,6 +6,8 @@ export interface InboundMessage {
   from: string;
   /** LID pengirim bila tersedia. */
   lid?: string;
+  /** Nama tampilan pengirim dari WhatsApp (pushName), bila ada. */
+  senderName?: string;
   /** Isi teks (caption untuk media). */
   body?: string;
   /** Jenis media bila ada. */
